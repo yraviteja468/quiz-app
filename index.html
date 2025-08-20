@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Quiz App</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'Poppins', sans-serif;
+      background: linear-gradient(135deg, #36d1dc, #5b86e5);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+    }
+
+    .quiz-container {
+      background: #fff;
+      padding: 25px;
+      border-radius: 15px;
+      width: 480px;
+      box-shadow: 0px 5px 20px rgba(0,0,0,0.3);
+      text-align: center;
+    }
+
+    h1 { margin-bottom: 15px; color: #333; }
+    .question { font-size: 18px; margin-bottom: 15px; }
+
+    .options { list-style: none; padding: 0; }
+    .options li {
+      background: #f2f2f2;
+      margin: 8px 0;
+      padding: 10px;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: 0.3s;
+    }
+    .options li:hover { background: #e0f7fa; }
+    .options li.correct { background: #c8e6c9; }
+    .options li.wrong { background: #ffcdd2; }
+
+    .btns { margin-top: 15px; }
+    button {
+      padding: 10px 15px;
+      margin: 5px;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: bold;
+      background: #36d1dc;
+      color: white;
+    }
+    button:hover { background: #2d9da8; }
+
+    .timer { margin-top: 10px; font-weight: bold; }
+    .result { font-size: 20px; font-weight: bold; margin-top: 20px; }
+    .hidden { display: none; }
+
+    /* Progress Bar */
+    .progress-container {
+      width: 100%;
+      background: #ddd;
+      border-radius: 10px;
+      margin: 10px 0;
+      height: 12px;
+    }
+    .progress-bar {
+      height: 12px;
+      width: 0%;
+      background: #36d1dc;
+      border-radius: 10px;
+      transition: width 0.4s ease;
+    }
+
+    .counter { margin-top: 5px; font-size: 14px; color: #444; }
+
+    .review { text-align: left; margin-top: 15px; }
+    .review h2 { font-size: 18px; margin-bottom: 10px; }
+    .review p { margin: 5px 0; }
+    .correct-text { color: green; font-weight: bold; }
+    .wrong-text { color: red; font-weight: bold; }
+  </style>
+</head>
+<body>
+  <div class="quiz-container">
+    <h1>📝 Quiz App</h1>
+
+    <!-- Start Screen -->
+    <div id="start-screen">
+      <p>Welcome to the Quiz! 🎉</p>
+      <button onclick="startQuiz()">Start Quiz</button>
+    </div>
+
+    <!-- Quiz Section -->
+    <div id="quiz" class="hidden">
+      <!-- Progress Bar + Counter -->
+      <div class="progress-container">
+        <div class="progress-bar" id="progress-bar"></div>
+      </div>
+      <div class="counter" id="counter">Question 1 of 4</div>
+
+      <div class="question" id="question">Question text</div>
+      <ul class="options" id="options"></ul>
+
+      <div class="btns">
+        <button onclick="prevQuestion()">⬅ Prev</button>
+        <button onclick="nextQuestion()">Next ➡</button>
+      </div>
+
+      <div class="timer">⏱ Time left: <span id="time">30</span>s</div>
+    </div>
+
+    <!-- Result Screen -->
+    <div class="result hidden" id="result"></div>
+    <div class="review hidden" id="review"></div>
+    <button id="restart-btn" class="hidden" onclick="restartQuiz()">🔄 Restart Quiz</button>
+  </div>
+
+  <script>
+    const quizData = [
+      { question: "Which language runs in a web browser?", options: ["Java", "C", "Python", "JavaScript"], answer: "JavaScript" },
+      { question: "What does CSS stand for?", options: ["Central Style Sheets", "Cascading Style Sheets", "Computer Style System", "Colorful Style Sheets"], answer: "Cascading Style Sheets" },
+      { question: "Which HTML tag is used for the largest heading?", options: ["<h1>", "<h3>", "<h6>", "<header>"], answer: "<h1>" },
+      { question: "Inside which HTML element do we put JavaScript?", options: ["<js>", "<javascript>", "<script>", "<code>"], answer: "<script>" }
+    ];
+
+    let currentQuestion = 0;
+    let score = 0;
+    let timeLeft = 30;
+    let timer;
+    let userAnswers = [];
+
+    function startQuiz() {
+      document.getElementById("start-screen").classList.add("hidden");
+      document.getElementById("quiz").classList.remove("hidden");
+      document.getElementById("result").classList.add("hidden");
+      document.getElementById("review").classList.add("hidden");
+      document.getElementById("restart-btn").classList.add("hidden");
+
+      currentQuestion = 0;
+      score = 0;
+      timeLeft = 30;
+      userAnswers = [];
+
+      document.getElementById("time").innerText = timeLeft;
+      showQuestion();
+      startTimer();
+    }
+
+    function showQuestion() {
+      const q = quizData[currentQuestion];
+      document.getElementById("question").innerText = q.question;
+
+      const optionsDiv = document.getElementById("options");
+      optionsDiv.innerHTML = "";
+      q.options.forEach(option => {
+        const li = document.createElement("li");
+        li.innerText = option;
+        li.onclick = () => selectAnswer(li, q.answer);
+        optionsDiv.appendChild(li);
+      });
+
+      // Restore previously selected answer
+      if (userAnswers[currentQuestion]) {
+        const selected = userAnswers[currentQuestion];
+        const liList = document.querySelectorAll("#options li");
+        liList.forEach(li => {
+          if (li.innerText === selected) {
+            li.style.pointerEvents = "none";
+            if (selected === q.answer) li.classList.add("correct");
+            else li.classList.add("wrong");
+          }
+        });
+      }
+
+      // Update progress bar & counter
+      updateProgress();
+    }
+
+    function selectAnswer(li, correctAnswer) {
+      const options = document.querySelectorAll("#options li");
+      options.forEach(opt => opt.style.pointerEvents = "none");
+
+      userAnswers[currentQuestion] = li.innerText;
+
+      if (li.innerText === correctAnswer) {
+        li.classList.add("correct");
+        score++;
+      } else {
+        li.classList.add("wrong");
+        options.forEach(opt => {
+          if (opt.innerText === correctAnswer) opt.classList.add("correct");
+        });
+      }
+    }
+
+    function nextQuestion() {
+      if (currentQuestion < quizData.length - 1) {
+        currentQuestion++;
+        showQuestion();
+      } else {
+        endQuiz();
+      }
+    }
+
+    function prevQuestion() {
+      if (currentQuestion > 0) {
+        currentQuestion--;
+        showQuestion();
+      }
+    }
+
+    function startTimer() {
+      clearInterval(timer);
+      timer = setInterval(() => {
+        if (timeLeft > 0) {
+          timeLeft--;
+          document.getElementById("time").innerText = timeLeft;
+        } else {
+          clearInterval(timer);
+          endQuiz();
+        }
+      }, 1000);
+    }
+
+    function updateProgress() {
+      const total = quizData.length;
+      const progressPercent = ((currentQuestion + 1) / total) * 100;
+      document.getElementById("progress-bar").style.width = progressPercent + "%";
+      document.getElementById("counter").innerText = `Question ${currentQuestion + 1} of ${total}`;
+    }
+
+    function endQuiz() {
+      clearInterval(timer);
+      document.getElementById("quiz").classList.add("hidden");
+
+      const resultDiv = document.getElementById("result");
+      resultDiv.classList.remove("hidden");
+      resultDiv.innerText = `✅ Quiz Finished! Your score: ${score}/${quizData.length}`;
+
+      showReview();
+      document.getElementById("restart-btn").classList.remove("hidden");
+    }
+
+    function showReview() {
+      const reviewDiv = document.getElementById("review");
+      reviewDiv.classList.remove("hidden");
+      reviewDiv.innerHTML = "<h2>📖 Review Answers</h2>";
+
+      quizData.forEach((q, index) => {
+        const userAns = userAnswers[index] || "Not Answered";
+        const correct = userAns === q.answer;
+        reviewDiv.innerHTML += `
+          <p><b>Q${index+1}:</b> ${q.question}</p>
+          <p>Your Answer: <span class="${correct ? 'correct-text' : 'wrong-text'}">${userAns}</span></p>
+          <p>Correct Answer: <span class="correct-text">${q.answer}</span></p>
+          <hr>
+        `;
+      });
+    }
+
+    function restartQuiz() {
+      document.getElementById("result").classList.add("hidden");
+      document.getElementById("review").classList.add("hidden");
+      document.getElementById("restart-btn").classList.add("hidden");
+      document.getElementById("start-screen").classList.remove("hidden");
+    }
+  </script>
+</body>
+</html>
